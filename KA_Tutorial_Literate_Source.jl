@@ -7,6 +7,8 @@
 # You don't need to understand GPU hardware in detail to follow along.
 # If you've written a `for` loop in Julia, you have everything you need.
 #
+# Source code: [github.com/cwittens/A\_KernelAbstractions\_Tutorial](https://github.com/cwittens/A_KernelAbstractions_Tutorial)
+#
 
 # The only mental model you need for now (simplified): a GPU runs thousands of
 # work items at once, and the hardware groups them into small bundles that
@@ -76,6 +78,14 @@ typeof(A_adapted)
 # CPU is extremely slow. Instead,
 # we need to tell the GPU to execute the operation in parallel, where each work
 # item handles one (or a few) elements. That's basically what a **kernel** is.
+#
+# If you really need to access a single element of a GPU array (e.g. for
+# debugging), you can use `@allowscalar` from `GPUArraysCore`:
+#
+# ```julia
+# using GPUArraysCore: @allowscalar
+# @allowscalar A_adapted[1]
+# ```
 #
 # Note: broadcasting *does* work on GPU arrays (`A_adapted .= A_adapted .* 2`) because
 # GPUArrays.jl implements it as a kernel behind the scenes. In fact, most standard

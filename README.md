@@ -8,6 +8,8 @@ A tutorial on writing portable GPU kernels in Julia using KernelAbstractions.jl.
 - [`KA_Tutorial_Markdown.md`](KA_Tutorial_Markdown.md) — tutorial (readable on GitHub)
 - [`KA_Tutorial_JupyterNotebook.ipynb`](KA_Tutorial_JupyterNotebook.ipynb) — tutorial (Jupyter notebook)
 
+An HTML version of the tutorial is available at [cwittens.github.io/A_KernelAbstractions_Tutorial](https://cwittens.github.io/A_KernelAbstractions_Tutorial).
+
 The Markdown and Notebook files were generated from the Literate source using [Literate.jl](https://github.com/fredrikekre/Literate.jl).
 
 ## Author
