@@ -7,6 +7,8 @@ NVIDIA (CUDA.jl), AMD (AMDGPU.jl), Apple (Metal.jl), Intel (oneAPI.jl), or plain
 You don't need to understand GPU hardware in detail to follow along.
 If you've written a `for` loop in Julia, you have everything you need.
 
+Source code: [github.com/cwittens/A\_KernelAbstractions\_Tutorial](https://github.com/cwittens/A_KernelAbstractions_Tutorial)
+
 The only mental model you need for now (simplified): a GPU runs thousands of
 work items at once, and the hardware groups them into small bundles that
 execute **in lockstep**. Every work item in a bundle runs the same instruction
@@ -56,7 +58,7 @@ maximum(A)
 ````
 
 ````
-1.9999566494789536
+1.9999769072191422
 ````
 
 This works perfectly on normal Julia arrays. But what happens when we try
@@ -74,7 +76,7 @@ typeof(A_adapted)
 ````
 
 ````
-CuArray{Float64, 1, CUDA.DeviceMemory}
+CUDA.CuArray{Float64, 1, CUDA.DeviceMemory}
 ````
 
 The array now lives on the GPU and if we try our `for` loop on this GPU array, it fails:
@@ -89,6 +91,14 @@ This error is intentional. Accessing GPU memory one element at a time from the
 CPU is extremely slow. Instead,
 we need to tell the GPU to execute the operation in parallel, where each work
 item handles one (or a few) elements. That's basically what a **kernel** is.
+
+If you really need to access a single element of a GPU array (e.g. for
+debugging), you can use `@allowscalar` from `GPUArraysCore`:
+
+```julia
+using GPUArraysCore: @allowscalar
+@allowscalar A_adapted[1]
+```
 
 Note: broadcasting *does* work on GPU arrays (`A_adapted .= A_adapted .* 2`) because
 GPUArrays.jl implements it as a kernel behind the scenes. In fact, most standard
@@ -156,7 +166,7 @@ maximum(A_adapted)
 ````
 
 ````
-1.9999930849436405
+1.9999730226647625
 ````
 
 ## Part 4: 2D indexing
@@ -190,7 +200,7 @@ maximum(B_adapted)
 ````
 
 ````
-1.9999887285893312
+1.9999809260474792
 ````
 
 The `ndrange` here is `size(B)` which is `(1000, 100)`. KA launches
@@ -307,8 +317,8 @@ mandelbrot(CUDABackend());
 ````
 
 ````
- 15.164905 seconds (46.92 k allocations: 734.577 MiB, 0.06% gc time)
-  0.170532 seconds (384 allocations: 366.224 MiB, 1.41% gc time)
+ 16.500216 seconds (47.00 k allocations: 734.580 MiB, 0.18% gc time, 0.04% compilation time)
+  0.182567 seconds (416 allocations: 366.226 MiB, 4.21% gc time)
 
 ````
 
@@ -321,7 +331,7 @@ using Plots
 heatmap(log.(img_cpu .+ 1)', c=:magma, aspect_ratio=1,
     axis=false, ticks=false, colorbar=false, size=(800, 600))
 ````
-![](mandelbrot.svg)
+![](KA_Tutorial_Markdown-41.svg)
 
 ### A note on lockstep execution and the Mandelbrot kernel
 
