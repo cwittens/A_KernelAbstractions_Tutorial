@@ -321,7 +321,7 @@ using Plots
 heatmap(log.(img_cpu .+ 1)', c=:magma, aspect_ratio=1,
     axis=false, ticks=false, colorbar=false, size=(800, 600))
 ````
-![](KA_Literate_Tutorial-41.svg)
+![](mandelbrot.svg)
 
 ### A note on lockstep execution and the Mandelbrot kernel
 
