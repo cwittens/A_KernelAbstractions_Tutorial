@@ -20,8 +20,14 @@ to why this matters at the end.
 
 ````julia
 using KernelAbstractions
-using CUDA
-using Adapt
+using CUDA: CUDABackend
+````
+
+using AMDGPU: ROCBackend
+
+````julia
+using GPUArraysCore: @allowscalar
+using Adapt: adapt
 
 backend = CUDABackend();
 ````
@@ -58,47 +64,68 @@ maximum(A)
 ````
 
 ````
-1.9999769072191422
+1.9999877811815394
 ````
 
 This works perfectly on normal Julia arrays. But what happens when we try
 to run a loop like this on GPU data?
 
-## Part 2: Why loops don't work on the GPU
+## Part 2: Why this doesn't work on a GPU
 
 Let's first move our array to the GPU using `adapt`.
 `adapt` converts a CPU array to whatever array type the backend uses.
-On CUDA, that's a `CuArray`. On CPU, it's just a regular `Array`.
+On CUDA for example, that's a `CuArray`. On CPU, it's just a regular `Array`.
+And given an  array, `get_backend` tells you which backend it lives on.
 
 ````julia
 A_adapted = adapt(backend, rand(100_000));
-typeof(A_adapted)
+get_backend(A_adapted)
 ````
 
 ````
-CUDA.CuArray{Float64, 1, CUDA.DeviceMemory}
+CUDABackend(false, false)
 ````
 
-The array now lives on the GPU and if we try our `for` loop on this GPU array, it fails:
+Our array now lives on the GPU and if we try our same `for` loop on this GPU array, it fails:
 
-```julia
-for i in eachindex(A_adapted)
-    A_adapted[i] *= 2   # ERROR: Scalar indexing is disallowed
+````julia
+try
+    for i in eachindex(A_adapted)
+        A_adapted[i] *= 2   # ERROR: Scalar indexing is disallowed
+    end
+catch e
+    println("Error: ", e)
 end
-```
+````
 
-This error is intentional. Accessing GPU memory one element at a time from the
-CPU is extremely slow. Instead,
-we need to tell the GPU to execute the operation in parallel, where each work
-item handles one (or a few) elements. That's basically what a **kernel** is.
+````
+Error: ErrorException("Scalar indexing is disallowed.\nInvocation of getindex resulted in scalar indexing of a GPU array.\nThis is typically caused by calling an iterating implementation of a method.\nSuch implementations *do not* execute on the GPU, but very slowly on the CPU,\nand therefore should be avoided.\n\nIf you want to allow scalar iteration, use `allowscalar` or `@allowscalar`\nto enable scalar iteration globally or for the operations in question.")
+
+````
+
+As the error message says, this is "scalar indexing": each `A_adapted[i]`
+individually moves one element from GPU to CPU (for the read) and back
+(for the write). This technically works (you can allow it, see below), but
+each transfer also forces a synchronization, so the CPU waits for the GPU
+after every single element. In a loop over 100,000 elements, that's 100,000
+round-trips. It's not wrong, just painfully slow, and not at all what we want.
 
 If you really need to access a single element of a GPU array (e.g. for
-debugging), you can use `@allowscalar` from `GPUArraysCore`:
+debugging, or to check a single value without moving the entire array back
+to the CPU), you can use `@allowscalar`:
 
-```julia
-using GPUArraysCore: @allowscalar
+````julia
 @allowscalar A_adapted[1]
-```
+````
+
+````
+0.9753812856651306
+````
+
+What we actually want is to tell the GPU to run this code *on the device*,
+so that all the reads and writes happen in GPU memory without any
+back-and-forth. That's what a **kernel** is: a function that executes
+on the GPU itself.
 
 Note: broadcasting *does* work on GPU arrays (`A_adapted .= A_adapted .* 2`) because
 GPUArrays.jl implements it as a kernel behind the scenes. In fact, most standard
@@ -166,7 +193,7 @@ maximum(A_adapted)
 ````
 
 ````
-1.9999730226647625
+1.9999959965891287
 ````
 
 ## Part 4: 2D indexing
@@ -200,7 +227,7 @@ maximum(B_adapted)
 ````
 
 ````
-1.9999809260474792
+1.9999952150410876
 ````
 
 The `ndrange` here is `size(B)` which is `(1000, 100)`. KA launches
@@ -317,8 +344,8 @@ mandelbrot(CUDABackend());
 ````
 
 ````
- 16.500216 seconds (47.00 k allocations: 734.580 MiB, 0.18% gc time, 0.04% compilation time)
-  0.182567 seconds (416 allocations: 366.226 MiB, 4.21% gc time)
+ 16.188508 seconds (46.94 k allocations: 734.578 MiB, 0.05% gc time)
+  0.172282 seconds (432 allocations: 366.226 MiB, 6.91% gc time)
 
 ````
 
@@ -331,7 +358,7 @@ using Plots
 heatmap(log.(img_cpu .+ 1)', c=:magma, aspect_ratio=1,
     axis=false, ticks=false, colorbar=false, size=(800, 600))
 ````
-![](KA_Tutorial_Markdown-41.svg)
+![](KA_Tutorial_Markdown-46.svg)
 
 ### A note on lockstep execution and the Mandelbrot kernel
 

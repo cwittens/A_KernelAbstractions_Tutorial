@@ -20,8 +20,10 @@
 # ## Setup
 
 using KernelAbstractions
-using CUDA
-using Adapt
+using CUDA: CUDABackend
+# using AMDGPU: ROCBackend
+using GPUArraysCore: @allowscalar
+using Adapt: adapt
 
 backend = CUDABackend();
 
@@ -55,37 +57,43 @@ maximum(A)
 # This works perfectly on normal Julia arrays. But what happens when we try
 # to run a loop like this on GPU data?
 
-# ## Part 2: Why loops don't work on the GPU
+# ## Part 2: Why this doesn't work on a GPU
 #
 # Let's first move our array to the GPU using `adapt`.
 # `adapt` converts a CPU array to whatever array type the backend uses.
-# On CUDA, that's a `CuArray`. On CPU, it's just a regular `Array`.
+# On CUDA for example, that's a `CuArray`. On CPU, it's just a regular `Array`.
+# And given an  array, `get_backend` tells you which backend it lives on.
 
 A_adapted = adapt(backend, rand(100_000));
-typeof(A_adapted)
+get_backend(A_adapted)
 
+# Our array now lives on the GPU and if we try our same `for` loop on this GPU array, it fails:
 
-# The array now lives on the GPU and if we try our `for` loop on this GPU array, it fails:
-#
-# ```julia
-# for i in eachindex(A_adapted)
-#     A_adapted[i] *= 2   # ERROR: Scalar indexing is disallowed
-# end
-# ```
-#
+try
+    for i in eachindex(A_adapted)
+        A_adapted[i] *= 2   # ERROR: Scalar indexing is disallowed
+    end
+catch e
+    println("Error: ", e)
+end
 
-# This error is intentional. Accessing GPU memory one element at a time from the
-# CPU is extremely slow. Instead,
-# we need to tell the GPU to execute the operation in parallel, where each work
-# item handles one (or a few) elements. That's basically what a **kernel** is.
+# As the error message says, this is "scalar indexing": each `A_adapted[i]`
+# individually moves one element from GPU to CPU (for the read) and back
+# (for the write). This technically works (you can allow it, see below), but
+# each transfer also forces a synchronization, so the CPU waits for the GPU
+# after every single element. In a loop over 100,000 elements, that's 100,000
+# round-trips. It's not wrong, just painfully slow, and not at all what we want.
 #
 # If you really need to access a single element of a GPU array (e.g. for
-# debugging), you can use `@allowscalar` from `GPUArraysCore`:
-#
-# ```julia
-# using GPUArraysCore: @allowscalar
-# @allowscalar A_adapted[1]
-# ```
+# debugging, or to check a single value without moving the entire array back
+# to the CPU), you can use `@allowscalar`:
+
+@allowscalar A_adapted[1]
+
+# What we actually want is to tell the GPU to run this code *on the device*,
+# so that all the reads and writes happen in GPU memory without any
+# back-and-forth. That's what a **kernel** is: a function that executes
+# on the GPU itself.
 #
 # Note: broadcasting *does* work on GPU arrays (`A_adapted .= A_adapted .* 2`) because
 # GPUArrays.jl implements it as a kernel behind the scenes. In fact, most standard
