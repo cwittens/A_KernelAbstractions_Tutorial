@@ -7,7 +7,8 @@
 # You don't need to understand GPU hardware in detail to follow along.
 # If you've written a `for` loop in Julia, you have everything you need.
 #
-# Source code: [github.com/cwittens/A\_KernelAbstractions\_Tutorial](https://github.com/cwittens/A_KernelAbstractions_Tutorial)
+# This tutorial is written using [Literate.jl](https://github.com/fredrikekre/Literate.jl).
+# For the source code, see [github.com/cwittens/A\_KernelAbstractions\_Tutorial](https://github.com/cwittens/A_KernelAbstractions_Tutorial).
 #
 
 # The only mental model you need for now (simplified): a GPU runs thousands of
@@ -21,7 +22,7 @@
 
 using KernelAbstractions
 using CUDA: CUDABackend
-# using AMDGPU: ROCBackend
+## using AMDGPU: ROCBackend
 using GPUArraysCore: @allowscalar
 using Adapt: adapt
 
@@ -74,7 +75,8 @@ try
         A_adapted[i] *= 2   # ERROR: Scalar indexing is disallowed
     end
 catch e
-    println("Error: ", e)
+    println("Error message:")
+    showerror(stdout, e)
 end
 
 # As the error message says, this is "scalar indexing": each `A_adapted[i]`
@@ -95,7 +97,7 @@ end
 # back-and-forth. That's what a **kernel** is: a function that executes
 # on the GPU itself.
 #
-# Note: broadcasting *does* work on GPU arrays (`A_adapted .= A_adapted .* 2`) because
+# **Note:** broadcasting *does* work on GPU arrays (`A_adapted .= A_adapted .* 2`) because
 # GPUArrays.jl implements it as a kernel behind the scenes. In fact, most standard
 # library functions just work on GPU arrays too: `sum`, `mean`, `std`, `cumsum`,
 # `map`, `reduce`, `maximum`, and many more. Each of these launches its own GPU

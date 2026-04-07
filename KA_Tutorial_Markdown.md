@@ -7,7 +7,8 @@ NVIDIA (CUDA.jl), AMD (AMDGPU.jl), Apple (Metal.jl), Intel (oneAPI.jl), or plain
 You don't need to understand GPU hardware in detail to follow along.
 If you've written a `for` loop in Julia, you have everything you need.
 
-Source code: [github.com/cwittens/A\_KernelAbstractions\_Tutorial](https://github.com/cwittens/A_KernelAbstractions_Tutorial)
+This tutorial is written using [Literate.jl](https://github.com/fredrikekre/Literate.jl).
+For the source code, see [github.com/cwittens/A\_KernelAbstractions\_Tutorial](https://github.com/cwittens/A_KernelAbstractions_Tutorial).
 
 The only mental model you need for now (simplified): a GPU runs thousands of
 work items at once, and the hardware groups them into small bundles that
@@ -21,11 +22,7 @@ to why this matters at the end.
 ````julia
 using KernelAbstractions
 using CUDA: CUDABackend
-````
-
-using AMDGPU: ROCBackend
-
-````julia
+# using AMDGPU: ROCBackend
 using GPUArraysCore: @allowscalar
 using Adapt: adapt
 
@@ -64,7 +61,7 @@ maximum(A)
 ````
 
 ````
-1.9999877811815394
+1.9999536503942332
 ````
 
 This works perfectly on normal Julia arrays. But what happens when we try
@@ -94,13 +91,21 @@ try
         A_adapted[i] *= 2   # ERROR: Scalar indexing is disallowed
     end
 catch e
-    println("Error: ", e)
+    println("Error message:")
+    showerror(stdout, e)
 end
 ````
 
 ````
-Error: ErrorException("Scalar indexing is disallowed.\nInvocation of getindex resulted in scalar indexing of a GPU array.\nThis is typically caused by calling an iterating implementation of a method.\nSuch implementations *do not* execute on the GPU, but very slowly on the CPU,\nand therefore should be avoided.\n\nIf you want to allow scalar iteration, use `allowscalar` or `@allowscalar`\nto enable scalar iteration globally or for the operations in question.")
+Error message:
+Scalar indexing is disallowed.
+Invocation of getindex resulted in scalar indexing of a GPU array.
+This is typically caused by calling an iterating implementation of a method.
+Such implementations *do not* execute on the GPU, but very slowly on the CPU,
+and therefore should be avoided.
 
+If you want to allow scalar iteration, use `allowscalar` or `@allowscalar`
+to enable scalar iteration globally or for the operations in question.
 ````
 
 As the error message says, this is "scalar indexing": each `A_adapted[i]`
@@ -119,7 +124,7 @@ to the CPU), you can use `@allowscalar`:
 ````
 
 ````
-0.9753812856651306
+0.13658744100685793
 ````
 
 What we actually want is to tell the GPU to run this code *on the device*,
@@ -127,7 +132,7 @@ so that all the reads and writes happen in GPU memory without any
 back-and-forth. That's what a **kernel** is: a function that executes
 on the GPU itself.
 
-Note: broadcasting *does* work on GPU arrays (`A_adapted .= A_adapted .* 2`) because
+**Note:** broadcasting *does* work on GPU arrays (`A_adapted .= A_adapted .* 2`) because
 GPUArrays.jl implements it as a kernel behind the scenes. In fact, most standard
 library functions just work on GPU arrays too: `sum`, `mean`, `std`, `cumsum`,
 `map`, `reduce`, `maximum`, and many more. Each of these launches its own GPU
@@ -193,7 +198,7 @@ maximum(A_adapted)
 ````
 
 ````
-1.9999959965891287
+1.999981179801593
 ````
 
 ## Part 4: 2D indexing
@@ -227,7 +232,7 @@ maximum(B_adapted)
 ````
 
 ````
-1.9999952150410876
+1.999983760284899
 ````
 
 The `ndrange` here is `size(B)` which is `(1000, 100)`. KA launches
@@ -344,8 +349,8 @@ mandelbrot(CUDABackend());
 ````
 
 ````
- 16.188508 seconds (46.94 k allocations: 734.578 MiB, 0.05% gc time)
-  0.172282 seconds (432 allocations: 366.226 MiB, 6.91% gc time)
+ 16.027749 seconds (46.92 k allocations: 734.577 MiB, 0.07% gc time)
+  0.172113 seconds (384 allocations: 366.224 MiB, 1.26% gc time)
 
 ````
 
@@ -358,7 +363,7 @@ using Plots
 heatmap(log.(img_cpu .+ 1)', c=:magma, aspect_ratio=1,
     axis=false, ticks=false, colorbar=false, size=(800, 600))
 ````
-![](KA_Tutorial_Markdown-46.svg)
+![](KA_Tutorial_Markdown-44.svg)
 
 ### A note on lockstep execution and the Mandelbrot kernel
 
